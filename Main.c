@@ -11,10 +11,17 @@
 #define MAX_CLIENTS 20
 #define MAX_CAJEROS 3
 // PracticaFinal
-FILE *logFile
+// char logFilePath[] = "/ruta/del/archivo.log"; No hay ruta de archivo ya que vamos a considerar que esta en la misma ruta que el ejecutable
+
+FILE *logFile;
+pthread_mutex_t logSemaforo;
+pthread_mutex_t repSemaforo;
+pthread_mutex_t cliSemaforo;
 //semaforo 1 y 2 y 3
 //Variable de condicion para reponedor
-char clientes = (char*)malloc(sizeof(char) * MAX_CLIENTS * 2);
+char clientes = (char*) malloc(sizeof(char) * MAX_CLIENTS * 2);
+
+// Los clientes tiene que ser un array de estructuras que almacene el id y su estado
 
 void *Reponedor (void *arg){
 
@@ -29,6 +36,7 @@ int randomizer(int max, int min){
     return rand() % (max - min +1) + min;
 }
 
+// La cola de clientes se puede implementar con un array con los pids y expulsar al de menor pid, o una COLA como estructura de datos.
 int main(int argc, char* argv){
     if(argc==1){
         printf("No has introducido ningún argumento. Debes introducir un número de asistentes mayor que 1.\n");
@@ -39,7 +47,7 @@ int main(int argc, char* argv){
     //     printf("El valor introducido es incorrecto. Debes introducir un número de asistentes mayor que 1.\n");
     //     return 1;
     // }
-    ss.sa_handler = addClient;
+    ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
     pthread_t cajero1, cajero2, cajero3, reponedor;
     pthread_attr_t attr;
@@ -54,6 +62,7 @@ int main(int argc, char* argv){
 
 
 void writeLogMessage ( char * id , char * msg ) {
+    pthread_mutex_lock(&logSemaforo);
     // Calculamos la hora actual
     time_t now = time (0) ;
     struct tm * tlocal = localtime (& now ) ;
@@ -63,12 +72,29 @@ void writeLogMessage ( char * id , char * msg ) {
     logFile = fopen ( logFile , "a");
     fprintf ( logFile , "[ %s] %s: %s\n", stnow , id , msg );
     fclose ( logFile );
+    pthread_mutex_unlock(&logSemaforo);
 }
 
-void addClient(int sig){
+    
+
+void añadirCliente(int sig){
     // Meter en la cola de clientes si todos lo cajeros estan ocupados
     // Si no, meter en algun cajero
-    clients;
-    cambio;
+    int i;
+    for(i = 0; i < MAX_CLIENTS; i++){
+        if(clientes[i] == 0){
+            pthread_t cliente;
+            // client.id -> +, Sacar el id del cliente para sumar 1 y sacar el id del siguiente cliente.
+            // Hacer metodo para buscar el mayor id de cliente en el array para determinar id del siguiente.
+            pthread_create(&cliente, NULL, cliente, (void*)i);
+            clientes[i] = 1;
+            break;
+        }
+    }
 }
+
+int menorIDCliente(){
+
+}
+
 
