@@ -68,6 +68,7 @@ void writeLogMessage ( char * id , char * msg ) {
 void addClient(int sig){
     // Meter en la cola de clientes si todos lo cajeros estan ocupados
     // Si no, meter en algun cajero
-    clients
+    clients;
+    cambio;
 }
 
