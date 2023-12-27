@@ -29,7 +29,39 @@ void *Reponedor (void *arg){
 }
 
 void *Cajero (void *arg){
+    int clientesAtendidos = 0;
+    int cajeroID = *((int *)arg);
 
+    while(1){
+        int indexCliente = -1;
+        for(int i = 0; i < MAX_CLIENTS; i++){
+            if(cliente[i].ESTADO == 0){
+                if(indexCliente = -1 || cliente[i].id < cliente[indexCliente].id){
+                    indexCliente = i;
+                }
+            }
+        }
+        if(indexCliente != -1){
+            cliente[indexCliente].ESTADO = 1;
+            writeLogMessage(cajeroID, "Atendiendo a cliente");
+            int cooldown = randomizer(5, 1);
+            sleep(cooldown);
+            inr random = randomizer(100, 1);
+            if (random >= 71 && random <= 95) {
+                writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
+                pthread_cond_signal(&condicionReponedor);
+                pthread_cond_wait(&condicionReponedor, &repSemaforo);
+            } else if (random >= 96 && random <= 100) {
+                writeLogMessage(cajeroID, "Cliente tiene problemas y no puede realizar la compra.");
+            }
+            cliente[indexCliente].ESTADO = 2;
+            clientesAtendidos++;
+            if(clientesAtendidos % 10 == 0){
+                writeLogMessage(cajeroID, "Descanso 20 seg");
+                sleep(20);
+            }
+        }
+    }
 }
 
 int randomizer(int max, int min){
