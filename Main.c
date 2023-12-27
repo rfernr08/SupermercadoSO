@@ -61,11 +61,12 @@ void *Cajero (void *arg){
             inr random = randomizer(100, 1);
             if (random >= 71 && random <= 95) {
                 writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
-                pthread_cond_signal(&condicionReponedor);
-                pthread_cond_wait(&condicionReponedor, &repSemaforo);
+                pthread_cond_signal(&Reponedor);
+                pthread_cond_wait(&Reponedor, &repSemaforo);
             } else if (random >= 96 && random <= 100) {
                 writeLogMessage(cajeroID, "Cliente tiene problemas y no puede realizar la compra.");
             }
+            // TO DO Escribir informacion en el log
             cliente[indexCliente].ESTADO = 2;
             clientesAtendidos++;
             if(clientesAtendidos % 10 == 0){
