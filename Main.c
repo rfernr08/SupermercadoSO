@@ -40,7 +40,12 @@ struct cliente{
 struct cliente *clientes; // Array de clientes
 
 void *Reponedor (void *arg){
-
+    while (1){
+        pthread_cond_wait(&Reponedor, &repSemaforo);
+        sleep(randomizer(1,5));
+        printf("El reponedor ha terminado de trabajar");
+        pthread_cond_signal(&Reponedor);
+    }
 }
 
 void *Cajero (void *arg){
@@ -80,11 +85,6 @@ void *Cajero (void *arg){
     }
 }
 
-int randomizer(int max, int min){
-    srand(gettid());
-    return rand() % (max - min +1) + min;
-}
-
 void *Cliente(void *arg) {
     int clienteID = *((int *)arg);
     writeLogMessage(clienteID, "Cliente en la fila");
@@ -98,8 +98,6 @@ void *Cliente(void *arg) {
     writeLogMessage(clienteID, "Cliente atendido y finaliza compra");
     pthread_exit(NULL);
 }
-
-
 
 // La cola de clientes se puede implementar con un array con los pids y expulsar al de menor pid, o una COLA como estructura de datos.
 int main(int argc, char* argv){
@@ -186,3 +184,7 @@ int menorIDCliente(){
     return menorId;
 }
 
+int randomizer(int max, int min){
+    srand(gettid());
+    return rand() % (max - min +1) + min;
+}
