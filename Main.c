@@ -19,7 +19,9 @@ pthread_mutex_t logSemaforo;
 pthread_mutex_t repSemaforo;
 pthread_mutex_t cliSemaforo;
 
-struct cliente *clientes; // Array de clientes
+pthread_cond_t repCondicion;
+
+
 //semaforo 1 y 2 y 3
 //Variable de condicion para reponedor
 //char clientes = (char*) malloc(sizeof(char) * MAX_CLIENTS * 2);
@@ -35,6 +37,7 @@ struct cliente{
     int estado;
 };
 
+struct cliente *clientes; // Array de clientes
 
 void *Reponedor (void *arg){
 
@@ -47,18 +50,18 @@ void *Cajero (void *arg){
     while(1){
         int indexCliente = -1;
         for(int i = 0; i < MAX_CLIENTS; i++){
-            if(cliente[i].ESTADO == 0){
-                if(indexCliente = -1 || cliente[i].id < cliente[indexCliente].id){
+            if(clientes[i].estado == 0){
+                if(indexCliente = -1 || clientes[i].id < clientes[indexCliente].id){
                     indexCliente = i;
                 }
             }
         }
         if(indexCliente != -1){
-            cliente[indexCliente].ESTADO = 1;
+            clientes[indexCliente].estado = 1;
             writeLogMessage(cajeroID, "Atendiendo a cliente");
             int cooldown = randomizer(5, 1);
             sleep(cooldown);
-            inr random = randomizer(100, 1);
+            int random = randomizer(100, 1);
             if (random >= 71 && random <= 95) {
                 writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
                 pthread_cond_signal(&Reponedor);
@@ -67,7 +70,7 @@ void *Cajero (void *arg){
                 writeLogMessage(cajeroID, "Cliente tiene problemas y no puede realizar la compra.");
             }
             // TO DO Escribir informacion en el log
-            cliente[indexCliente].ESTADO = 2;
+            clientes[indexCliente].estado = 2;
             clientesAtendidos++;
             if(clientesAtendidos % 10 == 0){
                 writeLogMessage(cajeroID, "Descanso 20 seg");
@@ -82,10 +85,26 @@ int randomizer(int max, int min){
     return rand() % (max - min +1) + min;
 }
 
+void *Cliente(void *arg) {
+    int clienteID = *((int *)arg);
+    writeLogMessage(clienteID, "Cliente en la fila");
+
+    int esperaMaxima = randomizer(10, 1);
+    sleep(esperaMaxima);
+    
+    // TO DO: Esperar a que un agente atienda al cliente
+
+    // TO DO: Guardar en el log la hora de finalización
+    writeLogMessage(clienteID, "Cliente atendido y finaliza compra");
+    pthread_exit(NULL);
+}
+
+
+
 // La cola de clientes se puede implementar con un array con los pids y expulsar al de menor pid, o una COLA como estructura de datos.
 int main(int argc, char* argv){
-    if(argc==1 || numClientes < 1){
-        printf("Argumento introduccido incorrecto. Debes introducir un número de asistentes y que se mayor de 1.\n");
+    if(argc==1 || atoi(argv[1]) < 1){
+        printf("Argumento introducido incorrecto. Debes introducir un número de asistentes que sea mayor de 1.\n");
         return 1;
     }
     pthread_mutex_init(&logSemaforo, NULL);
