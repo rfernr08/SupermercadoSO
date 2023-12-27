@@ -42,7 +42,7 @@ struct cliente *clientes; // Array de clientes
 void *Reponedor (void *arg){
     while (1){
         pthread_cond_wait(&Reponedor, &repSemaforo);
-        sleep(randomizer(1,5));
+        sleep(randomizer(5, 1));
         printf("El reponedor ha terminado de trabajar");
         pthread_cond_signal(&Reponedor);
     }
