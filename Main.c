@@ -43,10 +43,12 @@ struct cliente *clientes; // Array de clientes
 
 void *Reponedor (void *arg){
     while (1){
+        pthread_mutex_lock(&repSemaforo);
         pthread_cond_wait(&Reponedor, &repSemaforo);
         sleep(randomizer(5, 1));
         printf("El reponedor ha terminado de trabajar");
         pthread_cond_signal(&Reponedor);
+        pthread_mutex_unlock(&repSemaforo);
     }
 }
 
@@ -191,3 +193,4 @@ int randomizer(int max, int min){
     srand(gettid());
     return rand() % (max - min +1) + min;
 }
+
