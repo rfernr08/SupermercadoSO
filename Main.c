@@ -18,11 +18,23 @@ FILE *logFile;
 pthread_mutex_t logSemaforo;
 pthread_mutex_t repSemaforo;
 pthread_mutex_t cliSemaforo;
+
+struct cliente *clientes; // Array de clientes
 //semaforo 1 y 2 y 3
 //Variable de condicion para reponedor
-char clientes = (char*) malloc(sizeof(char) * MAX_CLIENTS * 2);
+//char clientes = (char*) malloc(sizeof(char) * MAX_CLIENTS * 2);
+enum Estado {
+    ESTADO_0, // esperando
+    ESTADO_1, // en cajero
+    ESTADO_2, // atendido
+};
 
 // Los clientes tiene que ser un array de estructuras que almacene el id y su estado
+struct cliente{
+    int id;
+    int estado;
+};
+
 
 void *Reponedor (void *arg){
 
@@ -56,9 +68,11 @@ int main(int argc, char* argv){
         return 1;
     }
 
-    int i;
-    for (i = 0; i < MAX_CLIENTS; i++) {
-        clientes[i] = 0;
+    clientes = (struct cliente*) malloc(sizeof(struct cliente) * MAX_CLIENTS); // Asignación de memoria en la función main
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        (clientes+i)->id = i;
+        (clientes+i)->estado = ESTADO_0;
     }
     
     struct sigaction ss;
@@ -75,6 +89,7 @@ int main(int argc, char* argv){
     if(pthread_mutex_destroy(&logSemaforo) != 0) exit(-1);
     if(pthread_mutex_destroy(&repSemaforo) != 0) exit(-1);
     if(pthread_mutex_destroy(&cliSemaforo) != 0) exit(-1);
+    free(clientes);
     return 0;
 }
 
@@ -93,19 +108,17 @@ void writeLogMessage ( char * id , char * msg ) {
     pthread_mutex_unlock(&logSemaforo);
 }
 
-    
-
 void añadirCliente(int sig){
     // Meter en la cola de clientes si todos lo cajeros estan ocupados
     // Si no, meter en algun cajero
     int i;
     for(i = 0; i < MAX_CLIENTS; i++){
-        if(clientes[i] == 0){
+        if((clientes+i)->id == 0){
             pthread_t cliente;
             // client.id -> +, Sacar el id del cliente para sumar 1 y sacar el id del siguiente cliente.
             // Hacer metodo para buscar el mayor id de cliente en el array para determinar id del siguiente.
             pthread_create(&cliente, NULL, cliente, (void*)i);
-            clientes[i] = 1;
+            (clientes+i)->id = 1;
             break;
         }
     }
@@ -113,9 +126,9 @@ void añadirCliente(int sig){
 
 int menorIDCliente(){
     int menorId = INT_MAX;
-    for(i = 0; i < MAX_CLIENTS; i++){
-        if(clientes[i] < menorId && clientes[i] != 0){
-            menorId = clientes[i];
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->id < menorId && (clientes+i)->id != 0){
+            menorId = (clientes+i)->id ;
         }
     }
     return menorId;
