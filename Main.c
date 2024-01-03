@@ -65,20 +65,27 @@ void *Cajero (void *arg){
             int cooldown = randomizer(5, 1);
             sleep(cooldown);
             int random = randomizer(100, 1);
-            if (random >= 71 && random <= 95) {
-                writeLogMessage(clienteSeleccionado->id, "Aviso al reponedor para comprobar un precio.");
-                pthread_cond_signal(&Reponedor);
-                pthread_cond_wait(&Reponedor, &repSemaforo);
-            } else if (random >= 96 && random <= 100) {
+            if(random >= 96 && random <= 100) {
                 writeLogMessage(clienteSeleccionado->id, "Cliente tiene problemas y no puede realizar la compra.");
+            }else{
+                if(random >= 71 && random <= 95){
+                    writeLogMessage(clienteSeleccionado->id, "Aviso al reponedor para comprobar un precio.");
+                    pthread_cond_signal(&Reponedor);
+                    pthread_cond_wait(&Reponedor, &repSemaforo);
+                }
+                int precio = randomizer(100, 1);
+                char compra[100];
+                sprintf(compra, "El precio de la compra es de %d", precio);
+                writeLogMessage(clienteSeleccionado->id, compra);
             }
             // TO DO Escribir informacion en el log
             clienteSeleccionado->estado = 2;
             clientesAtendidos++;
             if(clientesAtendidos % 10 == 0){
-                writeLogMessage(clienteSeleccionado->id, "Descanso 20 seg");
+                writeLogMessage(CajeroID, "Me tomo un descanso 20 seg");
                 sleep(20);
             }
+            writeLogMessage(CajeroID, "Acabe mi descanso");
         }
         pthread_mutex_unlock(&cliSemaforo);
     }
@@ -143,7 +150,6 @@ int main(int argc, char* argv){
     free(clientes);
     return 0;
 }
-
 
 void writeLogMessage ( char * id , char * msg ) {
     pthread_mutex_lock(&logSemaforo);
