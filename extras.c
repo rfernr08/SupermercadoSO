@@ -21,7 +21,8 @@ pthread_mutex_t cliSemaforo;
 
 pthread_cond_t repCondicion;
 
-int contadorIds = 0;
+int contadorIdsClientes = 0;
+int contadorIdsCajeros = 0;
 
 
 //semaforo 1 y 2 y 3
@@ -39,7 +40,13 @@ struct cliente{
     int estado;
 };
 
+struct cajero{
+    int id;
+};
+
 struct cliente *clientes; // Array de clientes
+
+struct cajero *cajeros;
 
 void *Reponedor (void *arg){
     while (1){
@@ -54,14 +61,14 @@ void *Reponedor (void *arg){
 
 void *Cajero (void *arg){
     int clientesAtendidos = 0;
-    int cajeroID = *arg;
     while(1){
         pthread_mutex_lock(&cliSemaforo);
         struct cliente *clienteSeleccionado = menorIDCliente();
+        struct cajero *cajeroSeleccionado = (cajeros + arg);
         if (clienteSeleccionado != NULL) {
             // TO DO Contactar con el cliente encontrado
-            clienteSeleccionado->estado = ESTADO_1; // Marcar al cliente como atendido
-            writeLogMessage(clienteSeleccionado->id, "Atendiendo a cliente");
+            clienteSeleccionado->estado = ESTADO_1; // Marcar al cliente en cajero
+            writeLogMessage(cajeroSeleccionado->id, "Atendiendo a cliente");
             int cooldown = randomizer(5, 1);
             sleep(cooldown);
             int random = randomizer(100, 1);
@@ -82,7 +89,7 @@ void *Cajero (void *arg){
             clienteSeleccionado->estado = ESTADO_2;
             clientesAtendidos++;
             if(clientesAtendidos % 10 == 0){
-                writeLogMessage(CajeroID, "Me tomo un descanso 20 seg");
+                writeLogMessage(cajeroSeleccionado->id, "Me tomo un descanso 20 seg");
                 sleep(20);
             }
             writeLogMessage(CajeroID, "Acabe mi descanso");
@@ -125,23 +132,27 @@ int main(int argc, char* argv){
     }
 
     clientes = (struct cliente*) malloc(sizeof(struct cliente) * MAX_CLIENTS); // Asignación de memoria en la función main
+    cajeros = (struct cajeros*) malloc(sizeof(struct cajeros) * MAX_CAJEROS); // Asignación de memoria en la función main
 
     // To DO: puede que haya que convertir el id en una variable global (Lo he hecho por ahora pero puede que no sea tan buena idea)
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        (clientes+i)->id = contadorIds++;
+        (clientes+i)->id = contadorIdsClientes++;
         (clientes+i)->estado = ESTADO_0;
-        pthread_create(&clientes[i], NULL, Cliente, contadorIds);
+        pthread_create(&clientes[i], NULL, Cliente, contadorIdsClientes);
     }
     
     struct sigaction ss;
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
-    pthread_t cajero1, cajero2, cajero3, reponedor;
+    pthread_t reponedor;
     pthread_attr_t attr;
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); 
-    pthread_create(&cajero1, &attr, Cajero, "Cajero 1 en su puesto");
-    pthread_create(&cajero2, &attr, Cajero, "Cajero 2 en su puesto");
-    pthread_create(&cajero3, &attr, Cajero, "Cajero 3 en su puesto");
+    
+    for(int i = 0; i < MAX_CAJEROS; i++){
+        (cajeros+i)->id = contadorIdsCajeros++;
+        pthread_create(&cajeros[i], &attr, Cajero, contadorIdsCajeros);
+    }
+    ss.sa_handler = añadirCajero;
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
     pause();
     if(pthread_mutex_destroy(&logSemaforo) != 0) exit(-1);
@@ -173,12 +184,24 @@ void añadirCliente(int sig){
     for(i = 0; i < MAX_CLIENTS; i++){
         if((clientes+i)->id == 0){
             pthread_t cliente;
-            (clientes+i)->id = contadorIds++;
+            (clientes+i)->id = contadorIdsClientes++;
             (clientes+i)->estado = ESTADO_0;
-            pthread_create(&cliente, NULL, cliente, contadorIds);
+            pthread_create(&cliente, NULL, cliente, contadorIdsClientes);
             break;
         }
     }
+}
+
+void añadirCajero(int sig){
+    int i;
+    for(i = 0; i < MAX_CAJEROS; i++){
+        if((cajeros+i)->id == 0){
+            pthread_t cajero;
+            (cajeros+i)->id = contadorIdsCajeros++;
+            pthread_create(&cajero, &attr, cajero, contadorIdsCajeros);
+            break;
+        }
+    } 
 }
 
 struct cliente *menorIDCliente(){
@@ -199,3 +222,4 @@ int randomizer(int max, int min){
     srand(gettid());
     return rand() % (max - min +1) + min;
 }
+
