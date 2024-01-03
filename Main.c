@@ -46,7 +46,7 @@ void *Reponedor (void *arg){
         pthread_mutex_lock(&repSemaforo);
         pthread_cond_wait(&Reponedor, &repSemaforo);
         sleep(randomizer(5, 1));
-        printf("El reponedor ha terminado de trabajar");
+        writeLogMessage("Reponedor", "El reponedor ha terminado de trabajar");
         pthread_cond_signal(&Reponedor);
         pthread_mutex_unlock(&repSemaforo);
     }
