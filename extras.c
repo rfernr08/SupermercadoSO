@@ -9,8 +9,6 @@
 #include <sys/wait.h>
 #include <limits.h>
 
-#define MAX_CLIENTS 20
-#define MAX_CAJEROS 3
 // PracticaFinal
 // char logFilePath[] = "/ruta/del/archivo.log"; No hay ruta de archivo ya que vamos a considerar que esta en la misma ruta que el ejecutable
 
@@ -23,6 +21,8 @@ pthread_cond_t repCondicion;
 
 int contadorIdsClientes = 0;
 int contadorIdsCajeros = 0;
+int MAX_CLIENTS = 20;
+int MAX_CAJEROS = 3;
 
 
 //semaforo 1 y 2 y 3
@@ -40,13 +40,9 @@ struct cliente{
     int estado;
 };
 
-struct cajero{
-    int id;
-};
-
 struct cliente *clientes; // Array de clientes
 
-struct cajero *cajeros;
+pthread_t *cajeros; // Array de cajeros
 
 void *Reponedor (void *arg){
     while (1){
@@ -59,24 +55,28 @@ void *Reponedor (void *arg){
     }
 }
 
-void *Cajero (void *arg){
+void *Cajero (int *arg){
     int clientesAtendidos = 0;
+    int cajeroID = *arg;
     while(1){
         pthread_mutex_lock(&cliSemaforo);
         struct cliente *clienteSeleccionado = menorIDCliente();
-        struct cajero *cajeroSeleccionado = (cajeros + arg);
         if (clienteSeleccionado != NULL) {
             // TO DO Contactar con el cliente encontrado
-            clienteSeleccionado->estado = ESTADO_1; // Marcar al cliente en cajero
-            writeLogMessage(cajeroSeleccionado->id, "Atendiendo a cliente");
+            clienteSeleccionado->estado = ESTADO_1; // Marcar al cliente como atendido
+            char atendiendo[100];
+            sprintf(atendiendo, "Atendiendo a cliente %d", clienteSeleccionado->id);
+            writeLogMessage(cajeroID, atendiendo);
             int cooldown = randomizer(5, 1);
             sleep(cooldown);
             int random = randomizer(100, 1);
             if(random >= 96 && random <= 100) {
-                writeLogMessage(clienteSeleccionado->id, "Cliente tiene problemas y no puede realizar la compra.");
+                char problema[200];
+                sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", clienteSeleccionado->id);
+                writeLogMessage(cajeroID, problema);
             }else{
                 if(random >= 71 && random <= 95){
-                    writeLogMessage(clienteSeleccionado->id, "Aviso al reponedor para comprobar un precio.");
+                    writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
                     pthread_cond_signal(&Reponedor);
                     pthread_cond_wait(&Reponedor, &repSemaforo);
                 }
@@ -86,13 +86,13 @@ void *Cajero (void *arg){
                 writeLogMessage(clienteSeleccionado->id, compra);
             }
             // TO DO Escribir informacion en el log
-            clienteSeleccionado->estado = ESTADO_2;
+            sacarCola(clienteSeleccionado->id);
             clientesAtendidos++;
             if(clientesAtendidos % 10 == 0){
-                writeLogMessage(cajeroSeleccionado->id, "Me tomo un descanso 20 seg");
+                writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
                 sleep(20);
             }
-            writeLogMessage(CajeroID, "Acabe mi descanso");
+            writeLogMessage(cajeroID, "Acabe mi descanso");
         }
         pthread_mutex_unlock(&cliSemaforo);
     }
@@ -104,6 +104,12 @@ void *Cliente(int arg) {
 
     int esperaMaxima = randomizer(10, 1);
     sleep(esperaMaxima);
+    int probabilidadSalida = randomizer(10, 1);
+    if(esperaMaxima == 1){
+        writeLogMessage(clienteID, "Cliente se va de la tienda");
+        pthread_exit(NULL);
+    }
+    
     
     // TO DO: Esperar a que un agente atienda al cliente
 
@@ -114,10 +120,12 @@ void *Cliente(int arg) {
 
 // La cola de clientes se puede implementar con un array con los pids y expulsar al de menor pid, o una COLA como estructura de datos.
 int main(int argc, char* argv){
-    // if(argc==1 || atoi(argv[1]) < 1){
-    //     printf("Argumento introducido incorrecto. Debes introducir un número de asistentes que sea mayor de 1.\n");
-    //     return 1;
-    // }
+    if(argc==1 || atoi(argv[1]) < 1 || atoi(argv[2]) < 1){
+        printf("Argumento introducido incorrecto. Debes introducir un número de asistentes y cajeros que sea mayor de 1.\n");
+        return 1;
+    }
+    MAX_CLIENTS = atoi(argv[1]);
+    MAX_CAJEROS = atoi(argv[2]);
     pthread_mutex_init(&logSemaforo, NULL);
     pthread_mutex_init(&repSemaforo, NULL);
     pthread_mutex_init(&cliSemaforo, NULL);
@@ -132,32 +140,40 @@ int main(int argc, char* argv){
     }
 
     clientes = (struct cliente*) malloc(sizeof(struct cliente) * MAX_CLIENTS); // Asignación de memoria en la función main
-    cajeros = (struct cajeros*) malloc(sizeof(struct cajeros) * MAX_CAJEROS); // Asignación de memoria en la función main
 
-    // To DO: puede que haya que convertir el id en una variable global (Lo he hecho por ahora pero puede que no sea tan buena idea)
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        (clientes+i)->id = contadorIdsClientes++;
-        (clientes+i)->estado = ESTADO_0;
-        pthread_create(&clientes[i], NULL, Cliente, contadorIdsClientes);
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        (clientes+i)->id = 0;
+        (clientes+i)->estado = ESTADO_2;
     }
-    
+
     struct sigaction ss;
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
     pthread_t reponedor;
     pthread_attr_t attr;
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); 
-    
-    for(int i = 0; i < MAX_CAJEROS; i++){
-        (cajeros+i)->id = contadorIdsCajeros++;
-        pthread_create(&cajeros[i], &attr, Cajero, contadorIdsCajeros);
+
+    cajeros = malloc(MAX_CAJEROS * sizeof(pthread_t));
+    if (cajeros == NULL) {
+        printf("Failed to allocate memory for threads.\n");
+        return 1;
     }
+
+    // Create threads
+    for (int i = 0; i < MAX_CAJEROS; i++) {
+        if (pthread_create(&cajeros[i], &attr, Cajero, contadorIdsCajeros++) != 0) {
+            printf("Failed to create thread %d.\n", i);
+            return 1;
+        }
+    }
+
     ss.sa_handler = añadirCajero;
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
     pause();
     if(pthread_mutex_destroy(&logSemaforo) != 0) exit(-1);
     if(pthread_mutex_destroy(&repSemaforo) != 0) exit(-1);
-    if(pthread_mutex_destroy(&cliSemaforo) != 0) exit(-1);
+    if(pthread_mutex_destroy(&cliSemaforo) != 0) exit(-1);    
+    free(cajeros);
     free(clientes);
     return 0;
 }
@@ -180,28 +196,29 @@ void writeLogMessage ( char * id , char * msg ) {
 void añadirCliente(int sig){
     // Meter en la cola de clientes si todos lo cajeros estan ocupados
     // Si no, meter en algun cajero
-    int i;
-    for(i = 0; i < MAX_CLIENTS; i++){
-        if((clientes+i)->id == 0){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->estado == ESTADO_2){
             pthread_t cliente;
-            (clientes+i)->id = contadorIdsClientes++;
+            (clientes+i)->id = ++contadorIds;
             (clientes+i)->estado = ESTADO_0;
-            pthread_create(&cliente, NULL, cliente, contadorIdsClientes);
+            pthread_create(&cliente, NULL, Cliente, contadorIds);
             break;
         }
     }
 }
+// TO DO
+void aumentarCola(){
+
+}
 
 void añadirCajero(int sig){
     int i;
-    for(i = 0; i < MAX_CAJEROS; i++){
-        if((cajeros+i)->id == 0){
-            pthread_t cajero;
-            (cajeros+i)->id = contadorIdsCajeros++;
-            pthread_create(&cajero, &attr, cajero, contadorIdsCajeros);
-            break;
-        }
-    } 
+    pthread_attr_t attr;
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); 
+
+    cajeros = realloc(cajeros, (contadorIdsCajeros+1) * sizeof(pthread_t));
+    pthread_t nuevoCajero;
+    pthread_create(&cajeros[contadorIdsCajeros -1], &attr, Cajero, contadorIdsCajeros++);
 }
 
 struct cliente *menorIDCliente(){
@@ -216,6 +233,16 @@ struct cliente *menorIDCliente(){
         }
     }
     return clienteSeleccionado;
+}
+
+
+void sacarCola(int clienteID){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->id == clienteID){
+            (clientes+i)->id = 0;
+            (clientes+i)->estado = ESTADO_2;
+        }
+    }
 }
 
 int randomizer(int max, int min){

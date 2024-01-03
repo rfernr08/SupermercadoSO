@@ -52,7 +52,7 @@ void *Reponedor (void *arg){
     }
 }
 
-void *Cajero (void *arg){
+void *Cajero (int *arg){
     int clientesAtendidos = 0;
     int cajeroID = *arg;
     while(1){
@@ -61,15 +61,19 @@ void *Cajero (void *arg){
         if (clienteSeleccionado != NULL) {
             // TO DO Contactar con el cliente encontrado
             clienteSeleccionado->estado = ESTADO_1; // Marcar al cliente como atendido
-            writeLogMessage(clienteSeleccionado->id, "Atendiendo a cliente");
+            char atendiendo[100];
+            sprintf(atendiendo, "Atendiendo a cliente %d", clienteSeleccionado->id);
+            writeLogMessage(cajeroID, atendiendo);
             int cooldown = randomizer(5, 1);
             sleep(cooldown);
             int random = randomizer(100, 1);
             if(random >= 96 && random <= 100) {
-                writeLogMessage(clienteSeleccionado->id, "Cliente tiene problemas y no puede realizar la compra.");
+                char problema[200];
+                sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", clienteSeleccionado->id);
+                writeLogMessage(cajeroID, problema);
             }else{
                 if(random >= 71 && random <= 95){
-                    writeLogMessage(clienteSeleccionado->id, "Aviso al reponedor para comprobar un precio.");
+                    writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
                     pthread_cond_signal(&Reponedor);
                     pthread_cond_wait(&Reponedor, &repSemaforo);
                 }
@@ -79,13 +83,13 @@ void *Cajero (void *arg){
                 writeLogMessage(clienteSeleccionado->id, compra);
             }
             // TO DO Escribir informacion en el log
-            clienteSeleccionado->estado = ESTADO_2;
+            sacarCola(clienteSeleccionado->id);
             clientesAtendidos++;
             if(clientesAtendidos % 10 == 0){
-                writeLogMessage(CajeroID, "Me tomo un descanso 20 seg");
+                writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
                 sleep(20);
             }
-            writeLogMessage(CajeroID, "Acabe mi descanso");
+            writeLogMessage(cajeroID, "Acabe mi descanso");
         }
         pthread_mutex_unlock(&cliSemaforo);
     }
@@ -97,8 +101,13 @@ void *Cliente(int arg) {
 
     int esperaMaxima = randomizer(10, 1);
     sleep(esperaMaxima);
+    int probabilidadSalida = randomizer(10, 1);
+    if(esperaMaxima == 1){
+        writeLogMessage(clienteID, "Cliente se va de la tienda");
+        pthread_exit(NULL);
+    }
     
-    // TO DO: Esperar a que un agente atienda al cliente
+    // TO DO: Esperar si un agente atienda al cliente
 
     // TO DO: Guardar en el log la hora de finalización
     writeLogMessage(clienteID, "Cliente atendido y finaliza compra");
@@ -126,13 +135,11 @@ int main(int argc, char* argv){
 
     clientes = (struct cliente*) malloc(sizeof(struct cliente) * MAX_CLIENTS); // Asignación de memoria en la función main
 
-    // To DO: puede que haya que convertir el id en una variable global (Lo he hecho por ahora pero puede que no sea tan buena idea)
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        (clientes+i)->id = contadorIds++;
-        (clientes+i)->estado = ESTADO_0;
-        pthread_create(&clientes[i], NULL, Cliente, contadorIds);
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        (clientes+i)->id = 0;
+        (clientes+i)->estado = ESTADO_2;
     }
-    
+
     struct sigaction ss;
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
@@ -169,13 +176,12 @@ void writeLogMessage ( char * id , char * msg ) {
 void añadirCliente(int sig){
     // Meter en la cola de clientes si todos lo cajeros estan ocupados
     // Si no, meter en algun cajero
-    int i;
-    for(i = 0; i < MAX_CLIENTS; i++){
-        if((clientes+i)->id == 0){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->estado == ESTADO_2){
             pthread_t cliente;
-            (clientes+i)->id = contadorIds++;
+            (clientes+i)->id = ++contadorIds;
             (clientes+i)->estado = ESTADO_0;
-            pthread_create(&cliente, NULL, cliente, contadorIds);
+            pthread_create(&cliente, NULL, Cliente, contadorIds);
             break;
         }
     }
@@ -193,6 +199,15 @@ struct cliente *menorIDCliente(){
         }
     }
     return clienteSeleccionado;
+}
+
+void sacarCola(int clienteID){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->id == clienteID){
+            (clientes+i)->id = 0;
+            (clientes+i)->estado = ESTADO_2;
+        }
+    }
 }
 
 int randomizer(int max, int min){
