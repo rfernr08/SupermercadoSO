@@ -68,6 +68,7 @@ void *Cajero (void *arg){
             if(random >= 96 && random <= 100) {
                 writeLogMessage(clienteSeleccionado->id, "Cliente tiene problemas y no puede realizar la compra.");
             }else{
+<<<<<<< Updated upstream
                 if(random >= 71 && random <= 95){
                     writeLogMessage(clienteSeleccionado->id, "Aviso al reponedor para comprobar un precio.");
                     pthread_cond_signal(&Reponedor);
@@ -84,6 +85,15 @@ void *Cajero (void *arg){
             if(clientesAtendidos % 10 == 0){
                 writeLogMessage(CajeroID, "Me tomo un descanso 20 seg");
                 sleep(20);
+=======
+                // TO DO Escribir informacion en el log
+                clienteSeleccionado->estado = 2;
+                clientesAtendidos++;
+                if(clientesAtendidos % 10 == 0){
+                    writeLogMessage(clienteSeleccionado->id, "Descanso 20 seg");
+                    sleep(20);
+                }
+>>>>>>> Stashed changes
             }
             writeLogMessage(CajeroID, "Acabe mi descanso");
         }
