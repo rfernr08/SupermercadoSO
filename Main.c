@@ -25,7 +25,7 @@ int contadorIds = 0;
 void *Reponedor(void *arg);
 void *Cajero(void *arg);
 void *Cliente(void *arg);
-void writeLogMessage(char *id, char *msg);
+void writeLogMessage(int id, char *msg, char *source);
 void añadirCliente(int sig);
 struct cliente *menorIDCliente();
 void cambiarEstadoCliente(int clienteID, int estado);
@@ -52,7 +52,7 @@ void *Reponedor(void *arg) {
         pthread_mutex_lock(&repSemaforo);
         pthread_cond_wait(&repCondicion, &repSemaforo);
         sleep(randomizer(5, 1));
-        writeLogMessage("Reponedor", "El reponedor ha terminado de trabajar");
+        writeLogMessage(1, "El reponedor ha terminado de trabajar", "Reponedor");
         pthread_cond_signal(&repCondicion);
         pthread_mutex_unlock(&repSemaforo);
     }
@@ -68,31 +68,31 @@ void *Cajero(void *arg) {
             cambiarEstadoCliente(idCliente, ESTADO_1);
             char atendiendo[100];
             sprintf(atendiendo, "Atendiendo a cliente %d", idCliente);
-            writeLogMessage(cajeroID, atendiendo);
+            writeLogMessage(cajeroID, atendiendo, "Cajero");
             int cooldown = randomizer(5, 1);
             sleep(cooldown);
             int random = randomizer(100, 1);
             if (random >= 96 && random <= 100) {
                 char problema[200];
                 sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", idCliente);
-                writeLogMessage(cajeroID, problema);
+                writeLogMessage(cajeroID, problema, "Cajero");
             } else {
                 if (random >= 71 && random <= 95) {
-                    writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
+                    writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.", "Cajero");
                     pthread_cond_signal(&repCondicion);
                     pthread_cond_wait(&repCondicion, &repSemaforo);
                 }
                 int precio = randomizer(100, 1);
                 char compra[100];
                 sprintf(compra, "El precio de la compra es de %d", precio);
-                writeLogMessage(cajeroID, compra);
+                writeLogMessage(cajeroID, compra, "Cajero");
             }
             cambiarEstadoCliente(idCliente, ESTADO_2);
             clientesAtendidos++;
             if (clientesAtendidos % 10 == 0) {
-                writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
+                writeLogMessage(cajeroID, "Me tomo un descanso 20 seg", "Cajero");
                 sleep(20);
-                writeLogMessage(cajeroID, "Acabe mi descanso");
+                writeLogMessage(cajeroID, "Acabe mi descanso", "Cajero");
             }
         }
     }
@@ -104,7 +104,7 @@ void *Cliente(void *arg) {
     if (clienteSeleccionado == NULL)
         pthread_exit(NULL);
 
-    writeLogMessage(clienteID, "Cliente en la fila");
+    writeLogMessage(clienteID, "Cliente en la fila", "Cliente");
 
     int comprobarSalida = 0;
     while (comprobarEstadoCliente(clienteID) != ESTADO_1) {
@@ -113,7 +113,7 @@ void *Cliente(void *arg) {
         if (comprobarSalida == 10) {
             int posibleSalida = randomizer(10, 1);
             if (posibleSalida == 10) {
-                writeLogMessage(clienteID, "Cliente se va de la tienda");
+                writeLogMessage(clienteID, "Cliente se va de la tienda", "Cliente");
                 sacarCola(clienteID);
                 pthread_exit(NULL);
             }
@@ -124,7 +124,7 @@ void *Cliente(void *arg) {
     while (comprobarEstadoCliente(clienteID) != ESTADO_2) {
         sleep(1);
     }
-    writeLogMessage(clienteID, "Cliente atendido y finaliza compra");
+    writeLogMessage(clienteID, "Cliente atendido y finaliza compra", "Cliente");
     pthread_exit(NULL);
 }
 
@@ -175,7 +175,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void writeLogMessage(char *id, char *msg) {
+void writeLogMessage(int id, char *msg, char *source) {
     pthread_mutex_lock(&logSemaforo);
     time_t now = time(0);
     struct tm *tlocal = localtime(&now);
@@ -183,7 +183,7 @@ void writeLogMessage(char *id, char *msg) {
     strftime(stnow, 25, " %d/ %m/ %y %H: %M: %S", tlocal);
 
     logFile = fopen("registroCaja.log", "a");
-    fprintf(logFile, "[%s] %s: %s\n", stnow, id, msg);
+    fprintf(logFile, "[%s] %s %d: %s\n", stnow, source, id, msg);
     fclose(logFile);
 
     pthread_mutex_unlock(&logSemaforo);
