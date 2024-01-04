@@ -58,58 +58,75 @@ void *Cajero (int *arg){
     while(1){
         pthread_mutex_lock(&cliSemaforo);
         struct cliente *clienteSeleccionado = menorIDCliente();
-        if (clienteSeleccionado != NULL) {
-            // TO DO Contactar con el cliente encontrado
-            clienteSeleccionado->estado = ESTADO_1; // Marcar al cliente como atendido
-            char atendiendo[100];
-            sprintf(atendiendo, "Atendiendo a cliente %d", clienteSeleccionado->id);
-            writeLogMessage(cajeroID, atendiendo);
-            int cooldown = randomizer(5, 1);
-            sleep(cooldown);
-            int random = randomizer(100, 1);
-            if(random >= 96 && random <= 100) {
-                char problema[200];
-                sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", clienteSeleccionado->id);
-                writeLogMessage(cajeroID, problema);
-            }else{
-                if(random >= 71 && random <= 95){
-                    writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
-                    pthread_cond_signal(&Reponedor);
-                    pthread_cond_wait(&Reponedor, &repSemaforo);
-                }
-                int precio = randomizer(100, 1);
-                char compra[100];
-                sprintf(compra, "El precio de la compra es de %d", precio);
-                writeLogMessage(clienteSeleccionado->id, compra);
+        int idCliente = clienteSeleccionado->id;
+        if (clienteSeleccionado == NULL) pthread_exit(NULL);
+        // TO DO Contactar con el cliente encontrado
+        cambiarEstadoCliente(idCliente, ESTADO_1); // Marcar al cliente como atendido
+        char atendiendo[100];
+        sprintf(atendiendo, "Atendiendo a cliente %d", clienteSeleccionado->id);
+        writeLogMessage(cajeroID, atendiendo);
+        int cooldown = randomizer(5, 1);
+        sleep(cooldown);
+        int random = randomizer(100, 1);
+        if(random >= 96 && random <= 100) {
+            char problema[200];
+            sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", clienteSeleccionado->id);
+            writeLogMessage(cajeroID, problema);
+        }else{
+            if(random >= 71 && random <= 95){
+                writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
+                pthread_cond_signal(&Reponedor);
+                pthread_cond_wait(&Reponedor, &repSemaforo);
             }
-            // TO DO Escribir informacion en el log
-            sacarCola(clienteSeleccionado->id);
-            clientesAtendidos++;
-            if(clientesAtendidos % 10 == 0){
-                writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
-                sleep(20);
-            }
-            writeLogMessage(cajeroID, "Acabe mi descanso");
+            int precio = randomizer(100, 1);
+            char compra[100];
+            sprintf(compra, "El precio de la compra es de %d", precio);
+            writeLogMessage(clienteSeleccionado->id, compra);
         }
-        pthread_mutex_unlock(&cliSemaforo);
+        // TO DO Escribir informacion en el log
+        cambiarEstadoCliente(idCliente, ESTADO_2);
+        clientesAtendidos++;
+        if(clientesAtendidos % 10 == 0){
+            writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
+            sleep(20);
+        }
+        writeLogMessage(cajeroID, "Acabe mi descanso");
     }
 }
 
 void *Cliente(int arg) {
-    int clienteID = arg;
+    struct cliente *clienteSeleccionado = buscarCliente(arg);
+    int clienteID = clienteSeleccionado->id;
+    int clienteEstado = clienteSeleccionado->estado;
+    if(clienteSeleccionado == NULL) pthread_exit(NULL);
     writeLogMessage(clienteID, "Cliente en la fila");
 
-    int esperaMaxima = randomizer(10, 1);
-    sleep(esperaMaxima);
-    int probabilidadSalida = randomizer(10, 1);
-    if(esperaMaxima == 1){
-        writeLogMessage(clienteID, "Cliente se va de la tienda");
-        pthread_exit(NULL);
+    //int esperaMaxima = randomizer(10, 1);
+    int comprobarSalida = 0;
+    while(comprobarEstadoCliente(clienteID) != ESTADO_1){
+        sleep(1);
+        comprobarSalida++;
+        if(comprobarSalida == 10){
+            int posibleSalida = randomizer(10, 1);
+            if(posibleSalida == 10){
+                writeLogMessage(clienteID, "Cliente se va de la tienda");
+                sacarCola(clienteID);
+                pthread_exit(NULL);
+            }
+            comprobarSalida = 0;
+        }
     }
+    //sleep(esperaMaxima);
+    // int probabilidadSalida = randomizer(10, 1);
+    // if(esperaMaxima == 1){
+    //     writeLogMessage(clienteID, "Cliente se va de la tienda");
+    //     pthread_exit(NULL);
+    // }
     
     // TO DO: Esperar si un agente atienda al cliente
-
-    // TO DO: Guardar en el log la hora de finalización
+    while(comprobarEstadoCliente(clienteID) != ESTADO_2){
+        sleep(1);
+    }
     writeLogMessage(clienteID, "Cliente atendido y finaliza compra");
     pthread_exit(NULL);
 }
@@ -176,6 +193,7 @@ void writeLogMessage ( char * id , char * msg ) {
 void añadirCliente(int sig){
     // Meter en la cola de clientes si todos lo cajeros estan ocupados
     // Si no, meter en algun cajero
+    pthread_mutex_lock(&cliSemaforo); // Lock the cliSemaforo semaphore
     for(int i = 0; i < MAX_CLIENTS; i++){
         if((clientes+i)->estado == ESTADO_2){
             pthread_t cliente;
@@ -185,11 +203,13 @@ void añadirCliente(int sig){
             break;
         }
     }
+    pthread_mutex_unlock(&cliSemaforo); // Unlock the cliSemaforo semaphore
 }
 
 struct cliente *menorIDCliente(){
     struct cliente *clienteSeleccionado = NULL;
     int menorId = INT_MAX;
+    pthread_mutex_lock(&cliSemaforo); // Lock the cliSemaforo semaphore
     for(int i = 0; i < MAX_CLIENTS; i++){
         if((clientes+i)->estado == ESTADO_0){
             if((clientes+i)->id < menorId && (clientes+i)->id != 0){
@@ -198,7 +218,30 @@ struct cliente *menorIDCliente(){
             }
         }
     }
+    pthread_mutex_unlock(&cliSemaforo); // Unlock the cliSemaforo semaphore
     return clienteSeleccionado;
+}
+
+void cambiarEstadoCliente(int clienteID, int estado){
+    pthread_mutex_lock(&cliSemaforo); // Lock the cliSemaforo semaphore
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->id == clienteID){
+            (clientes+i)->estado = estado;
+        }
+    }
+    pthread_mutex_unlock(&cliSemaforo); // Unlock the cliSemaforo semaphore
+}   
+
+int comprobarEstadoCliente(int clienteID){
+    int estado = -1;
+    pthread_mutex_lock(&cliSemaforo); // Lock the cliSemaforo semaphore
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->id == clienteID){
+            estado = (clientes+i)->estado;
+        }
+    }
+    pthread_mutex_unlock(&cliSemaforo); // Unlock the cliSemaforo semaphore
+    return estado;
 }
 
 void sacarCola(int clienteID){
@@ -208,6 +251,15 @@ void sacarCola(int clienteID){
             (clientes+i)->estado = ESTADO_2;
         }
     }
+}
+
+struct cliente *buscarCliente(int clienteID){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if((clientes+i)->id == clienteID){
+            return (clientes+i);
+        }
+    }
+    return NULL;
 }
 
 int randomizer(int max, int min){

@@ -199,16 +199,24 @@ void añadirCliente(int sig){
     for(int i = 0; i < MAX_CLIENTS; i++){
         if((clientes+i)->estado == ESTADO_2){
             pthread_t cliente;
-            (clientes+i)->id = ++contadorIds;
+            (clientes+i)->id = ++contadorIdsClientes;
             (clientes+i)->estado = ESTADO_0;
-            pthread_create(&cliente, NULL, Cliente, contadorIds);
+            pthread_create(&cliente, NULL, Cliente, contadorIdsClientes);
             break;
         }
     }
 }
-// TO DO
-void aumentarCola(){
 
+void aumentarCola(){
+    // Increase the size of the dynamic array by 1
+    clientes = realloc(clientes, (MAX_CLIENTS + 1) * sizeof(struct cliente));
+
+    // Add the new client at the end of the array
+    (clientes + MAX_CLIENTS)->id = 0;
+    (clientes + MAX_CLIENTS)->estado = ESTADO_2;
+
+    // Update the value of MAX_CLIENTS
+    MAX_CLIENTS++;
 }
 
 void añadirCajero(int sig){
