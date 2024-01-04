@@ -264,4 +264,8 @@ struct cliente *buscarCliente(int clienteID){
 int randomizer(int max, int min){
     srand(gettid());
     return rand() % (max - min +1) + min;
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> b1a113839769a52da44f872a00f3768d1b1ec3d3
