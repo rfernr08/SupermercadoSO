@@ -12,7 +12,7 @@ function menu()
 
 function ejecucion()
 {
-    if test -f PracticaIntermedia
+    if test -f Main
     then
         echo ¿A cuántos asistentes quieres llamar?
         read asi
@@ -21,8 +21,8 @@ function ejecucion()
                 echo La entrada introducida no es correcta, por favor, introduce un número entero mayor que 1
                 read asi
             done
-        chmod +x ./PracticaIntermedia
-        ./PracticaIntermedia $asi
+        chmod +x ./Main
+        ./Main $asi
         exit 0
     else
         echo Para poder ejecutar el programa debes compilar el archivo primero
@@ -35,14 +35,14 @@ while true
         read input
         case $input in
             1)
-            cat PracticaIntermedia.c
+            cat Main.c
             echo
             echo ----------------------------------------------------------
             echo
             ;;
 
             2)
-            gcc PracticaIntermedia.c -o PracticaIntermedia
+            gcc Main.c -o Main
             ;;
 
             3)
