@@ -56,7 +56,6 @@ void *Cajero (int *arg){
     int clientesAtendidos = 0;
     int cajeroID = *arg;
     while(1){
-        pthread_mutex_lock(&cliSemaforo);
         struct cliente *clienteSeleccionado = menorIDCliente();
         int idCliente = clienteSeleccionado->id;
         if (clienteSeleccionado == NULL) pthread_exit(NULL);
