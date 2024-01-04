@@ -60,7 +60,7 @@ void *Reponedor(void *arg) {
 
 void *Cajero(void *arg) {
     int clientesAtendidos = 0;
-    char *cajeroID = (char *)arg;
+    char *cajeroID = *((int *) arg);
     while (1) {
         struct cliente *clienteSeleccionado = menorIDCliente();
         int idCliente = clienteSeleccionado->id;
