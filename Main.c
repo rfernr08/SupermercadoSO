@@ -58,38 +58,39 @@ void *Cajero (int *arg){
     while(1){
         struct cliente *clienteSeleccionado = menorIDCliente();
         int idCliente = clienteSeleccionado->id;
-        if (clienteSeleccionado == NULL) pthread_exit(NULL);
-        // TO DO Contactar con el cliente encontrado
-        cambiarEstadoCliente(idCliente, ESTADO_1); // Marcar al cliente como atendido
-        char atendiendo[100];
-        sprintf(atendiendo, "Atendiendo a cliente %d", clienteSeleccionado->id);
-        writeLogMessage(cajeroID, atendiendo);
-        int cooldown = randomizer(5, 1);
-        sleep(cooldown);
-        int random = randomizer(100, 1);
-        if(random >= 96 && random <= 100) {
-            char problema[200];
-            sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", clienteSeleccionado->id);
-            writeLogMessage(cajeroID, problema);
-        }else{
-            if(random >= 71 && random <= 95){
-                writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
-                pthread_cond_signal(&Reponedor);
-                pthread_cond_wait(&Reponedor, &repSemaforo);
+        if (clienteSeleccionado == NULL){
+            
+            cambiarEstadoCliente(idCliente, ESTADO_1); // Marcar al cliente como atendido
+            char atendiendo[100];
+            sprintf(atendiendo, "Atendiendo a cliente %d", clienteSeleccionado->id);
+            writeLogMessage(cajeroID, atendiendo);
+            int cooldown = randomizer(5, 1);
+            sleep(cooldown);
+            int random = randomizer(100, 1);
+            if(random >= 96 && random <= 100) {
+                char problema[200];
+                sprintf(problema, "Cliente %d tiene problemas y no puede realizar la compra.", clienteSeleccionado->id);
+                writeLogMessage(cajeroID, problema);
+            }else{
+                if(random >= 71 && random <= 95){
+                    writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.");
+                    pthread_cond_signal(&Reponedor);
+                    pthread_cond_wait(&Reponedor, &repSemaforo);
+                }
+                int precio = randomizer(100, 1);
+                char compra[100];
+                sprintf(compra, "El precio de la compra es de %d", precio);
+                writeLogMessage(clienteSeleccionado->id, compra);
             }
-            int precio = randomizer(100, 1);
-            char compra[100];
-            sprintf(compra, "El precio de la compra es de %d", precio);
-            writeLogMessage(clienteSeleccionado->id, compra);
+            // TO DO Escribir informacion en el log
+            cambiarEstadoCliente(idCliente, ESTADO_2);
+            clientesAtendidos++;
+            if(clientesAtendidos % 10 == 0){
+                writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
+                sleep(20);            
+                writeLogMessage(cajeroID, "Acabe mi descanso");
+            }
         }
-        // TO DO Escribir informacion en el log
-        cambiarEstadoCliente(idCliente, ESTADO_2);
-        clientesAtendidos++;
-        if(clientesAtendidos % 10 == 0){
-            writeLogMessage(cajeroID, "Me tomo un descanso 20 seg");
-            sleep(20);
-        }
-        writeLogMessage(cajeroID, "Acabe mi descanso");
     }
 }
 
@@ -143,7 +144,7 @@ int main(int argc, char* argv){
     pthread_cond_t repCondicion;
     pthread_cond_init(&repCondicion, NULL);
 
-    logFile = fopen("logFile.txt", "w");
+    logFile = fopen("registroCaja.log", "w");
     if (logFile == NULL) {
         printf("Error opening log file.\n");
         return 1;
