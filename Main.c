@@ -10,9 +10,6 @@
 #include <sys/syscall.h>
 #include <limits.h>
 
-#define MAX_CLIENTS 20
-#define MAX_CAJEROS 3
-
 FILE *logFile;
 pthread_mutex_t logSemaforo;
 pthread_mutex_t repSemaforo;
@@ -20,7 +17,10 @@ pthread_mutex_t cliSemaforo;
 
 pthread_cond_t repCondicion;
 
-int contadorIds = 0;
+int contadorIdsClientes = 0;
+int contadorIdsCajeros = 0;
+int MAX_CLIENTS = 20;
+int MAX_CAJEROS = 3;
 
 // Nombramos las funciones
 void *Reponedor(void *arg);
@@ -35,6 +35,8 @@ void sacarCola(int clienteID);
 struct cliente *buscarCliente(int clienteID);
 int randomizer(int max, int min);
 void acabarPrograma(int sig);
+void aumentarCola(int sig);
+void añadirCajero(int sig);
 
 enum Estado {
     ESTADO_0,
@@ -62,7 +64,6 @@ void *Reponedor(void *arg) {
 }
 
 void *Cajero(void *arg) {
-    printf("Soi un cajero\n");
     int clientesAtendidos = 0;
     int cajeroID = *(int*) arg;
     while (1) {
@@ -103,7 +104,6 @@ void *Cajero(void *arg) {
 }
 
 void *Cliente(void *arg) {
-    printf("Soi un cliente\n");
     int clienteID = *(int*) arg;
     struct cliente *clienteSeleccionado = buscarCliente(clienteID);
     if (clienteSeleccionado == NULL)
@@ -134,8 +134,42 @@ void *Cliente(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    printf("Iniciando supermercado...\n");
+    printf("Bienvenido al supermercado.\n");    
+    printf("Puedes eleguir tu mismo el tamaño de la cola y el numero de cajeros, si no son 20 y 3 de base.\n");
+    printf("Para añadir un cliente, manda una señal kill -10 al id del programa (SIGUSR1).\n");
+    printf("Para salir del programa, manda una señal kill -19 para cerrar el supermercado por el dia (SIGSTOP).\n");
+    printf("Para añadir un cajero, manda una señal kill -7 si quieres contratar a un cajero mas (SIGBUS).\n");
+    printf("Para aumentar el tamaño de la cola, manda una señal kill -18 si quieres expandir la cola de clientes (SIGCONT).\n");
+
+    if(argc == 1){
+        MAX_CLIENTS = 20;
+        MAX_CAJEROS = 3;
+    } else if(argc == 2){
+        if(atoi(argv[1]) < 1){
+            printf("Argumento introducido incorrecto. Debes introducir un tamaño de cola que sea mayor de 1.\n");
+            return 1;
+        }
+        MAX_CLIENTS = atoi(argv[1]);
+        MAX_CAJEROS = 3;
+    } else if(argc == 3){
+        if(atoi(argv[1]) < 1 || atoi(argv[2]) < 1){
+            printf("Argumento introducido incorrecto. Debes introducir un tamaño de cola y numero cajeros que sea mayor de 1.\n");
+            return 1;
+        }
+        MAX_CLIENTS = atoi(argv[1]);
+        MAX_CAJEROS = atoi(argv[2]);
+    } else{
+        printf("Numero de argumentos invalido.\n");
+        return 0;
+    }
+    
     writeLogMessage(0, "Iniciando supermercado...", "Main");
+    if(atoi(argv[1]) != 0){
+        MAX_CLIENTS = atoi(argv[1]);
+    }
+
+    MAX_CAJEROS = atoi(argv[2]);
+
     pthread_mutex_init(&logSemaforo, NULL);
     pthread_mutex_init(&repSemaforo, NULL);
     pthread_mutex_init(&cliSemaforo, NULL);
@@ -159,9 +193,14 @@ int main(int argc, char *argv[]) {
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
 
-    struct sigaction ss2;
-    ss2.sa_handler = acabarPrograma;
-    sigaction(SIGINT, &ss2, NULL);
+    ss.sa_handler = aumentarCola;
+    sigaction(SIGCONT, &ss, NULL);
+
+    ss.sa_handler = añadirCajero;
+    sigaction(SIGBUS, &ss, NULL);
+
+    ss.sa_handler = acabarPrograma;
+    sigaction(SIGSTOP, &ss, NULL);
 
     pthread_t cajero1, cajero2, cajero3, reponedor;
     pthread_attr_t attr;
@@ -198,7 +237,6 @@ void writeLogMessage(int id, char *msg, char *source) {
 
 void añadirCliente(int sig) {
     pthread_mutex_lock(&cliSemaforo);
-    printf("Añadiendo cliente...\n");
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->estado == ESTADO_2) {
             pthread_t cliente;
@@ -209,6 +247,23 @@ void añadirCliente(int sig) {
         }
     }
     pthread_mutex_unlock(&cliSemaforo);
+}
+
+void aumentarCola(int sig){
+    clientes = realloc(clientes, (MAX_CLIENTS + 1) * sizeof(struct cliente));
+    (clientes + MAX_CLIENTS)->id = 0;
+    (clientes + MAX_CLIENTS)->estado = ESTADO_2;
+    MAX_CLIENTS++;
+}
+
+void añadirCajero(int sig){
+    int i;
+    pthread_attr_t attr;
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); 
+
+    cajeros = realloc(cajeros, (contadorIdsCajeros+1) * sizeof(pthread_t));
+    pthread_t nuevoCajero;
+    pthread_create(&cajeros[contadorIdsCajeros -1], &attr, Cajero, contadorIdsCajeros++);
 }
 
 struct cliente *menorIDCliente() {
@@ -279,9 +334,7 @@ int randomizer(int max, int min) {
 
 
 void acabarPrograma(int sig) {
-    printf("Acabando programa...\n");
     writeLogMessage(0, "Acabando programa...", "Main");
-    printf("Cerrando supermercado...\n");
     if (pthread_mutex_destroy(&logSemaforo) != 0)
         exit(-1);
     if (pthread_mutex_destroy(&repSemaforo) != 0)
