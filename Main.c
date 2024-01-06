@@ -51,6 +51,8 @@ struct cliente {
 
 struct cliente *clientes;
 
+p_thread_t *cajeros;
+
 void *Reponedor(void *arg) {
     printf("Soi un reponedor\n");
     while (1) {
@@ -189,6 +191,20 @@ int main(int argc, char *argv[]) {
         (clientes + i)->estado = ESTADO_2;
     }
 
+    cajeros = malloc(MAX_CAJEROS * sizeof(pthread_t));
+    if (cajeros == NULL) {
+        printf("Failed to allocate memory for threads.\n");
+        return 1;
+    }
+
+    // Create threads
+    for (int i = 0; i < MAX_CAJEROS; i++) {
+        if (pthread_create(&cajeros[i], &attr, Cajero, contadorIdsCajeros++) != 0) {
+            printf("Failed to create thread %d.\n", i);
+            return 1;
+        }
+    }
+    
     struct sigaction ss;
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
@@ -205,13 +221,9 @@ int main(int argc, char *argv[]) {
     pthread_t cajero1, cajero2, cajero3, reponedor;
     pthread_attr_t attr;
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    int cajero1ID = 1;
-    int cajero2ID = 2;
-    int cajero3ID = 3;
+    
+    
 
-    pthread_create(&cajero1, &attr, Cajero, &cajero1ID);
-    pthread_create(&cajero2, &attr, Cajero, &cajero2ID);
-    pthread_create(&cajero3, &attr, Cajero, &cajero3ID);
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
 
     while(1){
@@ -242,7 +254,7 @@ void añadirCliente(int sig) {
             pthread_t cliente;
             (clientes + i)->id = ++contadorIds;
             (clientes + i)->estado = ESTADO_0;
-            pthread_create(&cliente, NULL, Cliente, &contadorIds);
+            pthread_create(&cliente, NULL, Cliente, &contadorIdsClientes);
             break;
         }
     }
