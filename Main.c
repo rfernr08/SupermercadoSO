@@ -60,7 +60,7 @@ void *Reponedor(void *arg) {
 
 void *Cajero(void *arg) {
     int clientesAtendidos = 0;
-    char *cajeroID = *((int *) arg);
+    int cajeroID = *(int*) arg;
     while (1) {
         struct cliente *clienteSeleccionado = menorIDCliente();
         int idCliente = clienteSeleccionado->id;
@@ -99,7 +99,7 @@ void *Cajero(void *arg) {
 }
 
 void *Cliente(void *arg) {
-    int clienteID = *((int *)arg);
+    int clienteID = *(int*) arg;
     struct cliente *clienteSeleccionado = buscarCliente(clienteID);
     if (clienteSeleccionado == NULL)
         pthread_exit(NULL);
