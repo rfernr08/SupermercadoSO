@@ -50,6 +50,7 @@ struct cliente {
 struct cliente *clientes;
 
 void *Reponedor(void *arg) {
+    printf("Soi un reponedor\n");
     while (1) {
         pthread_mutex_lock(&repSemaforo);
         pthread_cond_wait(&repCondicion, &repSemaforo);
@@ -165,10 +166,13 @@ int main(int argc, char *argv[]) {
     pthread_t cajero1, cajero2, cajero3, reponedor;
     pthread_attr_t attr;
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    int cajero1ID = 1;
+    int cajero2ID = 2;
+    int cajero3ID = 3;
 
-    pthread_create(&cajero1, &attr, Cajero, "Cajero 1 en su puesto");
-    pthread_create(&cajero2, &attr, Cajero, "Cajero 2 en su puesto");
-    pthread_create(&cajero3, &attr, Cajero, "Cajero 3 en su puesto");
+    pthread_create(&cajero1, &attr, Cajero, &cajero1ID);
+    pthread_create(&cajero2, &attr, Cajero, &cajero2ID);
+    pthread_create(&cajero3, &attr, Cajero, &cajero3ID);
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
 
     while(1){
