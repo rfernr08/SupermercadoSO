@@ -51,7 +51,7 @@ struct cliente {
 
 struct cliente *clientes;
 
-p_thread_t *cajeros;
+pthread_t *cajeros;
 
 void *Reponedor(void *arg) {
     printf("Soi un reponedor\n");
@@ -175,7 +175,8 @@ int main(int argc, char *argv[]) {
     pthread_mutex_init(&logSemaforo, NULL);
     pthread_mutex_init(&repSemaforo, NULL);
     pthread_mutex_init(&cliSemaforo, NULL);
-
+    pthread_attr_t attr;
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     pthread_cond_init(&repCondicion, NULL);
 
     logFile = fopen("registroCaja.log", "w");
@@ -197,12 +198,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
     // Create threads
     for (int i = 0; i < MAX_CAJEROS; i++) {
-        if (pthread_create(&cajeros[i], &attr, Cajero, contadorIdsCajeros++) != 0) {
+        if (pthread_create(&cajeros[i], &attr, Cajero, &contadorIdsCajeros) != 0) {
             printf("Failed to create thread %d.\n", i);
             return 1;
         }
+        contadorIdsCajeros++;
     }
     
     struct sigaction ss;
@@ -218,10 +222,7 @@ int main(int argc, char *argv[]) {
     ss.sa_handler = acabarPrograma;
     sigaction(SIGSTOP, &ss, NULL);
 
-    pthread_t cajero1, cajero2, cajero3, reponedor;
-    pthread_attr_t attr;
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    
+    pthread_t reponedor;
     
 
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
@@ -252,7 +253,7 @@ void añadirCliente(int sig) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->estado == ESTADO_2) {
             pthread_t cliente;
-            (clientes + i)->id = ++contadorIds;
+            (clientes + i)->id = ++contadorIdsClientes;
             (clientes + i)->estado = ESTADO_0;
             pthread_create(&cliente, NULL, Cliente, &contadorIdsClientes);
             break;
@@ -275,7 +276,8 @@ void añadirCajero(int sig){
 
     cajeros = realloc(cajeros, (contadorIdsCajeros+1) * sizeof(pthread_t));
     pthread_t nuevoCajero;
-    pthread_create(&cajeros[contadorIdsCajeros -1], &attr, Cajero, contadorIdsCajeros++);
+    contadorIdsCajeros++;
+    pthread_create(&cajeros[contadorIdsCajeros -1], &attr, Cajero, &contadorIdsCajeros);
 }
 
 struct cliente *menorIDCliente() {
