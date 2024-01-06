@@ -7,6 +7,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 #include <limits.h>
 
 #define MAX_CLIENTS 20
@@ -33,6 +34,7 @@ int comprobarEstadoCliente(int clienteID);
 void sacarCola(int clienteID);
 struct cliente *buscarCliente(int clienteID);
 int randomizer(int max, int min);
+void acabarPrograma(int sig);
 
 enum Estado {
     ESTADO_0,
@@ -59,12 +61,13 @@ void *Reponedor(void *arg) {
 }
 
 void *Cajero(void *arg) {
+    printf("Soi un cajero\n");
     int clientesAtendidos = 0;
     int cajeroID = *(int*) arg;
     while (1) {
         struct cliente *clienteSeleccionado = menorIDCliente();
-        int idCliente = clienteSeleccionado->id;
-        if (clienteSeleccionado == NULL) {
+        if (clienteSeleccionado != NULL) {        
+            int idCliente = clienteSeleccionado->id;
             cambiarEstadoCliente(idCliente, ESTADO_1);
             char atendiendo[100];
             sprintf(atendiendo, "Atendiendo a cliente %d", idCliente);
@@ -99,6 +102,7 @@ void *Cajero(void *arg) {
 }
 
 void *Cliente(void *arg) {
+    printf("Soi un cliente\n");
     int clienteID = *(int*) arg;
     struct cliente *clienteSeleccionado = buscarCliente(clienteID);
     if (clienteSeleccionado == NULL)
@@ -129,6 +133,8 @@ void *Cliente(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
+    printf("Iniciando supermercado...\n");
+    writeLogMessage(0, "Iniciando supermercado...", "Main");
     pthread_mutex_init(&logSemaforo, NULL);
     pthread_mutex_init(&repSemaforo, NULL);
     pthread_mutex_init(&cliSemaforo, NULL);
@@ -152,6 +158,10 @@ int main(int argc, char *argv[]) {
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
 
+    struct sigaction ss2;
+    ss2.sa_handler = acabarPrograma;
+    sigaction(SIGINT, &ss2, NULL);
+
     pthread_t cajero1, cajero2, cajero3, reponedor;
     pthread_attr_t attr;
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -161,16 +171,9 @@ int main(int argc, char *argv[]) {
     pthread_create(&cajero3, &attr, Cajero, "Cajero 3 en su puesto");
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
 
-    pause();
-
-    if (pthread_mutex_destroy(&logSemaforo) != 0)
-        exit(-1);
-    if (pthread_mutex_destroy(&repSemaforo) != 0)
-        exit(-1);
-    if (pthread_mutex_destroy(&cliSemaforo) != 0)
-        exit(-1);
-
-    free(clientes);
+    while(1){
+        pause();
+    }
 
     return 0;
 }
@@ -191,6 +194,7 @@ void writeLogMessage(int id, char *msg, char *source) {
 
 void añadirCliente(int sig) {
     pthread_mutex_lock(&cliSemaforo);
+    printf("Añadiendo cliente...\n");
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->estado == ESTADO_2) {
             pthread_t cliente;
@@ -264,8 +268,23 @@ struct cliente *buscarCliente(int clienteID) {
 }
 
 int randomizer(int max, int min) {
-    srand(getpid());
+    pid_t threadId = syscall(SYS_gettid);
+    srand(threadId);
     return rand() % (max - min + 1) + min;
 }
 
 
+void acabarPrograma(int sig) {
+    printf("Acabando programa...\n");
+    writeLogMessage(0, "Acabando programa...", "Main");
+    printf("Cerrando supermercado...\n");
+    if (pthread_mutex_destroy(&logSemaforo) != 0)
+        exit(-1);
+    if (pthread_mutex_destroy(&repSemaforo) != 0)
+        exit(-1);
+    if (pthread_mutex_destroy(&cliSemaforo) != 0)
+        exit(-1);
+    free(clientes);
+    fclose(logFile);
+    exit(0);
+}
