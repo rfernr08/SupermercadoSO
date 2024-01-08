@@ -124,7 +124,6 @@ void *Cliente(void *arg) {
                 sacarCola(clienteID);
                 pthread_exit(NULL);
             }
-            comprobarSalida = 0;
         }
     }
 
@@ -139,19 +138,12 @@ int main(int argc, char *argv[]) {
     printf("Bienvenido al supermercado.\n");    
     printf("Puedes eleguir tu mismo el tamaño de la cola y el numero de cajeros, si no son 20 y 3 de base.\n");
     printf("Para añadir un cliente, manda una señal kill -10 al id del programa (SIGUSR1).\n");
-    printf("Para salir del programa, manda una señal kill -19 para cerrar el supermercado por el dia (SIGSTOP).\n");
+    printf("Para salir del programa, manda una señal kill -19 para cerrar el supermercado por el dia (SIGCONT).\n");
     printf("Para añadir un cajero, manda una señal kill -7 si quieres contratar a un cajero mas (SIGBUS).\n");
-    printf("Para aumentar el tamaño de la cola, manda una señal kill -18 si quieres expandir la cola de clientes (SIGCONT).\n");
+    printf("Para aumentar el tamaño de la cola, manda una señal kill -18 si quieres expandir la cola de clientes (SIGUSR2).\n");
 
     if(argc == 1){
         MAX_CLIENTS = 20;
-        MAX_CAJEROS = 3;
-    } else if(argc == 2){
-        if(atoi(argv[1]) < 1){
-            printf("Argumento introducido incorrecto. Debes introducir un tamaño de cola que sea mayor de 1.\n");
-            return 1;
-        }
-        MAX_CLIENTS = atoi(argv[1]);
         MAX_CAJEROS = 3;
     } else if(argc == 3){
         if(atoi(argv[1]) < 1 || atoi(argv[2]) < 1){
@@ -214,13 +206,13 @@ int main(int argc, char *argv[]) {
     sigaction(SIGUSR1, &ss, NULL);
 
     ss.sa_handler = aumentarCola;
-    sigaction(SIGCONT, &ss, NULL);
+    sigaction(SIGUSR2, &ss, NULL);
 
     ss.sa_handler = añadirCajero;
     sigaction(SIGBUS, &ss, NULL);
 
     ss.sa_handler = acabarPrograma;
-    sigaction(SIGSTOP, &ss, NULL);
+    sigaction(SIGCONT, &ss, NULL);
 
     pthread_t reponedor;
     
@@ -358,4 +350,4 @@ void acabarPrograma(int sig) {
     free(clientes);
     fclose(logFile);
     exit(0);
-}
+}comprobarSalida = 0;
