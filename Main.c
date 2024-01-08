@@ -350,4 +350,5 @@ void acabarPrograma(int sig) {
     free(clientes);
     fclose(logFile);
     exit(0);
-}comprobarSalida = 0;
+}
+
