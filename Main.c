@@ -14,20 +14,19 @@ FILE *logFile;
 pthread_mutex_t logSemaforo;
 pthread_mutex_t repSemaforo;
 pthread_mutex_t cliSemaforo;
-
 pthread_cond_t repCondicion;
-
 int contadorIdsClientes = 0;
 int contadorIdsCajeros = 0;
-int MAX_CLIENTS = 20;
-int MAX_CAJEROS = 3;
-
+int MAX_CLIENTS;
+int MAX_CAJEROS;
 // Nombramos las funciones
 void *Reponedor(void *arg);
 void *Cajero(void *arg);
 void *Cliente(void *arg);
 void writeLogMessage(int id, char *msg, char *source);
 void añadirCliente(int sig);
+void aumentarCola(int sig);
+void añadirCajero(int sig);
 struct cliente *menorIDCliente();
 void cambiarEstadoCliente(int clienteID, int estado);
 int comprobarEstadoCliente(int clienteID);
@@ -35,22 +34,16 @@ void sacarCola(int clienteID);
 struct cliente *buscarCliente(int clienteID);
 int randomizer(int max, int min);
 void acabarPrograma(int sig);
-void aumentarCola(int sig);
-void añadirCajero(int sig);
-
 enum Estado {
     ESTADO_0,
     ESTADO_1,
     ESTADO_2,
 };
-
 struct cliente {
     int id;
     int estado;
 };
-
 struct cliente *clientes;
-
 pthread_t *cajeros;
 
 void *Reponedor(void *arg) {
@@ -64,8 +57,8 @@ void *Reponedor(void *arg) {
         pthread_mutex_unlock(&repSemaforo);
     }
 }
-
 void *Cajero(void *arg) {
+    printf("Soi un cajero\n");
     int clientesAtendidos = 0;
     int cajeroID = *(int*) arg;
     while (1) {
@@ -106,13 +99,12 @@ void *Cajero(void *arg) {
 }
 
 void *Cliente(void *arg) {
+    printf("Soi un cliente\n");
     int clienteID = *(int*) arg;
     struct cliente *clienteSeleccionado = buscarCliente(clienteID);
     if (clienteSeleccionado == NULL)
         pthread_exit(NULL);
-
     writeLogMessage(clienteID, "Cliente en la fila", "Cliente");
-
     int comprobarSalida = 0;
     while (comprobarEstadoCliente(clienteID) != ESTADO_1) {
         sleep(1);
@@ -124,23 +116,22 @@ void *Cliente(void *arg) {
                 sacarCola(clienteID);
                 pthread_exit(NULL);
             }
+            comprobarSalida = 0;
         }
     }
-
     while (comprobarEstadoCliente(clienteID) != ESTADO_2) {
         sleep(1);
     }
     writeLogMessage(clienteID, "Cliente atendido y finaliza compra", "Cliente");
     pthread_exit(NULL);
 }
-
 int main(int argc, char *argv[]) {
-    printf("Bienvenido al supermercado.\n");    
-    printf("Puedes eleguir tu mismo el tamaño de la cola y el numero de cajeros, si no son 20 y 3 de base.\n");
-    printf("Para añadir un cliente, manda una señal kill -10 al id del programa (SIGUSR1).\n");
-    printf("Para salir del programa, manda una señal kill -19 para cerrar el supermercado por el dia (SIGCONT).\n");
-    printf("Para añadir un cajero, manda una señal kill -7 si quieres contratar a un cajero mas (SIGBUS).\n");
-    printf("Para aumentar el tamaño de la cola, manda una señal kill -18 si quieres expandir la cola de clientes (SIGUSR2).\n");
+    printf("Iniciando supermercado...\n");
+    writeLogMessage(0, "Iniciando supermercado...", "Main");
+    pthread_mutex_init(&logSemaforo, NULL);
+    pthread_mutex_init(&repSemaforo, NULL);
+    pthread_mutex_init(&cliSemaforo, NULL);
+    pthread_cond_init(&repCondicion, NULL);
 
     if(argc == 1){
         MAX_CLIENTS = 20;
@@ -156,92 +147,57 @@ int main(int argc, char *argv[]) {
         printf("Numero de argumentos invalido.\n");
         return 0;
     }
-    
-    writeLogMessage(0, "Iniciando supermercado...", "Main");
-    if(atoi(argv[1]) != 0){
-        MAX_CLIENTS = atoi(argv[1]);
-    }
-
-    MAX_CAJEROS = atoi(argv[2]);
-
-    pthread_mutex_init(&logSemaforo, NULL);
-    pthread_mutex_init(&repSemaforo, NULL);
-    pthread_mutex_init(&cliSemaforo, NULL);
-    pthread_attr_t attr;
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_cond_init(&repCondicion, NULL);
 
     logFile = fopen("registroCaja.log", "w");
     if (logFile == NULL) {
         printf("Error opening log file.\n");
         return 1;
     }
-
     clientes = (struct cliente *)malloc(sizeof(struct cliente) * MAX_CLIENTS);
-
     for (int i = 0; i < MAX_CLIENTS; i++) {
         (clientes + i)->id = 0;
         (clientes + i)->estado = ESTADO_2;
     }
 
-    cajeros = malloc(MAX_CAJEROS * sizeof(pthread_t));
-    if (cajeros == NULL) {
-        printf("Failed to allocate memory for threads.\n");
-        return 1;
-    }
-
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-    // Create threads
-    for (int i = 0; i < MAX_CAJEROS; i++) {
-        if (pthread_create(&cajeros[i], &attr, Cajero, &contadorIdsCajeros) != 0) {
-            printf("Failed to create thread %d.\n", i);
-            return 1;
-        }
-        contadorIdsCajeros++;
-    }
-    
     struct sigaction ss;
     ss.sa_handler = añadirCliente;
     sigaction(SIGUSR1, &ss, NULL);
+    struct sigaction ss2;
+    ss2.sa_handler = acabarPrograma;
+    sigaction(SIGINT, &ss2, NULL);
 
-    ss.sa_handler = aumentarCola;
-    sigaction(SIGUSR2, &ss, NULL);
-
-    ss.sa_handler = añadirCajero;
-    sigaction(SIGBUS, &ss, NULL);
-
-    ss.sa_handler = acabarPrograma;
-    sigaction(SIGCONT, &ss, NULL);
-
+    cajeros = (pthread_t *)malloc(sizeof(pthread_t) * MAX_CAJEROS);
     pthread_t reponedor;
-    
-
+    pthread_attr_t attr;
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    for(int i = 0; i < MAX_CAJEROS; i++){
+        pthread_t cajero;
+        cajeros[i] = cajero;
+        pthread_create(&cajero, &attr, Cajero, &contadorIdsCajeros);
+        contadorIdsCajeros++;
+    }
     pthread_create(&reponedor, &attr, Reponedor, "Reponedor listo para ser util");
 
     while(1){
         pause();
     }
-
     return 0;
 }
-
 void writeLogMessage(int id, char *msg, char *source) {
     pthread_mutex_lock(&logSemaforo);
     time_t now = time(0);
     struct tm *tlocal = localtime(&now);
     char stnow[25];
     strftime(stnow, 25, " %d/ %m/ %y %H: %M: %S", tlocal);
-
     logFile = fopen("registroCaja.log", "a");
     fprintf(logFile, "[%s] %s %d: %s\n", stnow, source, id, msg);
     fclose(logFile);
-
     pthread_mutex_unlock(&logSemaforo);
 }
 
 void añadirCliente(int sig) {
     pthread_mutex_lock(&cliSemaforo);
+    printf("Añadiendo cliente...\n");
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->estado == ESTADO_2) {
             pthread_t cliente;
@@ -265,7 +221,6 @@ void añadirCajero(int sig){
     int i;
     pthread_attr_t attr;
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); 
-
     cajeros = realloc(cajeros, (contadorIdsCajeros+1) * sizeof(pthread_t));
     pthread_t nuevoCajero;
     contadorIdsCajeros++;
@@ -275,7 +230,6 @@ void añadirCajero(int sig){
 struct cliente *menorIDCliente() {
     struct cliente *clienteSeleccionado = NULL;
     int menorId = INT_MAX;
-
     pthread_mutex_lock(&cliSemaforo);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->estado == ESTADO_0) {
@@ -286,7 +240,6 @@ struct cliente *menorIDCliente() {
         }
     }
     pthread_mutex_unlock(&cliSemaforo);
-
     return clienteSeleccionado;
 }
 
@@ -302,7 +255,6 @@ void cambiarEstadoCliente(int clienteID, int estado) {
 
 int comprobarEstadoCliente(int clienteID) {
     int estado = -1;
-
     pthread_mutex_lock(&cliSemaforo);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->id == clienteID) {
@@ -310,10 +262,8 @@ int comprobarEstadoCliente(int clienteID) {
         }
     }
     pthread_mutex_unlock(&cliSemaforo);
-
     return estado;
 }
-
 void sacarCola(int clienteID) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->id == clienteID) {
@@ -322,7 +272,6 @@ void sacarCola(int clienteID) {
         }
     }
 }
-
 struct cliente *buscarCliente(int clienteID) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if ((clientes + i)->id == clienteID) {
@@ -331,16 +280,15 @@ struct cliente *buscarCliente(int clienteID) {
     }
     return NULL;
 }
-
 int randomizer(int max, int min) {
     pid_t threadId = syscall(SYS_gettid);
     srand(threadId);
     return rand() % (max - min + 1) + min;
 }
-
-
 void acabarPrograma(int sig) {
+    printf("Acabando programa...\n");
     writeLogMessage(0, "Acabando programa...", "Main");
+    printf("Cerrando supermercado...\n");
     if (pthread_mutex_destroy(&logSemaforo) != 0)
         exit(-1);
     if (pthread_mutex_destroy(&repSemaforo) != 0)
@@ -351,4 +299,3 @@ void acabarPrograma(int sig) {
     fclose(logFile);
     exit(0);
 }
-
