@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 #include <limits.h>
+#include <stdbool.h>
 
 FILE *logFile;
 pthread_mutex_t logSemaforo;
@@ -16,6 +17,7 @@ pthread_mutex_t repSemaforo;
 pthread_mutex_t cliSemaforo;
 pthread_cond_t repCondicion;
 int contadorIdsClientes = 0;
+bool final = false;
 
 int MAX_CLIENTS;
 int MAX_CAJEROS;
@@ -51,7 +53,6 @@ void *Reponedor(void *arg) {
         pthread_mutex_lock(&repSemaforo);
         pthread_cond_wait(&repCondicion, &repSemaforo);
         sleep(randomizer(5, 1));
-        //writeLogMessage(1, "El reponedor ha terminado de trabajar", "Reponedor");
         pthread_cond_signal(&repCondicion);
         pthread_mutex_unlock(&repSemaforo);
     }
@@ -59,7 +60,7 @@ void *Reponedor(void *arg) {
 void *Cajero(void *arg) {
     int clientesAtendidos = 0;
     int cajeroID = *(int*) arg;
-    while (1) {
+    while (1 && !final) {
         struct cliente *clienteSeleccionado = menorIDCliente();
         if (clienteSeleccionado != NULL) {        
             int idCliente = clienteSeleccionado->id;
@@ -76,7 +77,6 @@ void *Cajero(void *arg) {
                 writeLogMessage(cajeroID, problema, "Cajero");
             } else {
                 if (random >= 71 && random <= 95) {
-                    //writeLogMessage(cajeroID, "Aviso al reponedor para comprobar un precio.", "Cajero");
                     pthread_cond_signal(&repCondicion);
                     pthread_cond_wait(&repCondicion, &repSemaforo);
                 }
@@ -88,15 +88,18 @@ void *Cajero(void *arg) {
             cambiarEstadoCliente(idCliente, ESTADO_2);
             clientesAtendidos++;
             if (clientesAtendidos % 10 == 0) {
+                writeLogMessage(cajeroID, "Me voy a tomar un descanso", "Cajero");
                 sleep(20);
-                //writeLogMessage(cajeroID, "Acabe mi descanso", "Cajero");
+                writeLogMessage(cajeroID, "Acabe mi descanso", "Cajero");
             }
         }
     }
+    char clientesAtendidosNumero[100];
+    sprintf(clientesAtendidosNumero, "He atendido a %d clientes", clientesAtendidos);
+    writeLogMessage(cajeroID, clientesAtendidosNumero, "Cajero");
 }
 
 void *Cliente(void *arg) {
-
     int clienteID = *(int*) arg;
     struct cliente *clienteSeleccionado = buscarCliente(clienteID);
     if (clienteSeleccionado == NULL)
@@ -123,7 +126,6 @@ void *Cliente(void *arg) {
     pthread_exit(NULL);
 }
 int main(int argc, char *argv[]) {
-    //writeLogMessage(0, "Iniciando supermercado...", "Main");
     pthread_mutex_init(&logSemaforo, NULL);
     pthread_mutex_init(&repSemaforo, NULL);
     pthread_mutex_init(&cliSemaforo, NULL);
@@ -281,7 +283,7 @@ int randomizer(int max, int min) {
     return rand() % (max - min + 1) + min;
 }
 void acabarPrograma(int sig) {
-    //writeLogMessage(0, "Acabando programa...", "Main");
+    final = true;
     if (pthread_mutex_destroy(&logSemaforo) != 0)
         exit(-1);
     if (pthread_mutex_destroy(&repSemaforo) != 0)
