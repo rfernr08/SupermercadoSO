@@ -284,6 +284,7 @@ int randomizer(int max, int min) {
 }
 void acabarPrograma(int sig) {
     final = true;
+    sleep(10); // Sleep para asegurar que todos los hilos acaban y guardan sus clientes atendidos antes de cerrar el programa
     if (pthread_mutex_destroy(&logSemaforo) != 0)
         exit(-1);
     if (pthread_mutex_destroy(&repSemaforo) != 0)
